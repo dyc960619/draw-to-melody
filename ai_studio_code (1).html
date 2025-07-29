@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tina 画图变音乐 Draw to Melody</title>
+    <style>
+        /* CSS 样式代码 */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 20px;
+            background-color: #f8f9fa;
+            color: #333;
+        }
+
+        h1 {
+            font-size: 2em;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            gap: 30px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .color-brushes {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .color-option {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 4px solid transparent;
+            box-sizing: border-box;
+            transition: border-color 0.2s;
+        }
+
+        .color-option.active {
+            border-color: #007bff;
+        }
+
+        .brush-size {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #drawing-canvas {
+            border: 2px solid #ccc;
+            background-color: white;
+            cursor: crosshair;
+            max-width: 100%;
+        }
+
+        .action-buttons {
+            margin-top: 20px;
+            display: flex;
+            gap: 20px;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            transition: background-color 0.2s;
+        }
+
+        #play-music-btn {
+            background-color: #007bff;
+        }
+        #play-music-btn:hover {
+            background-color: #0056b3;
+        }
+
+        #clear-canvas-btn {
+            background-color: #dc3545;
+        }
+        #clear-canvas-btn:hover {
+            background-color: #c82333;
+        }
+
+        .instructions {
+            margin-top: 20px;
+            text-align: left;
+            max-width: 600px;
+            padding: 0 15px;
+            line-height: 1.6;
+        }
+
+        .instructions b {
+            color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Tina 画图变音乐 Draw to Melody</h1>
+
+    <div class="controls">
+        <div class="color-brushes">
+            <span>Color Brushes 画笔颜色:</span>
+            <div class="color-option active" style="background-color: red;" data-color="red"></div>
+            <div class="color-option" style="background-color: limegreen;" data-color="limegreen"></div>
+            <div class="color-option" style="background-color: blue;" data-color="blue"></div>
+            <div class="color-option" style="background-color: yellow;" data-color="yellow"></div>
+            <div class="color-option" style="background-color: black;" data-color="black"></div>
+        </div>
+        <div class="brush-size">
+            <label for="brush-size-slider">Brush Size 画笔大小:</label>
+            <input type="range" id="brush-size-slider" min="2" max="50" value="10">
+        </div>
+    </div>
+
+    <!-- 绘画区域 -->
+    <canvas id="drawing-canvas"></canvas>
+
+    <div class="action-buttons">
+        <button id="play-music-btn">Turn Drawing into Music 变成音乐</button>
+        <button id="clear-canvas-btn">Clear 清除绘画</button>
+    </div>
+
+    <div class="instructions">
+        <p>Draw in the area above. Different colors produce different sound timbres.</p>
+        <p>The horizontal position (left-to-right) determines when a sound plays.</p>
+        <p>The vertical position (top-to-bottom) determines the pitch (higher up = higher pitch).</p>
+        <hr>
+        <p>在上方区域绘画，以创建音乐盒旋律。</p>
+        <p><b>Y轴位置:</b> 决定音符在音阶中的音高 (位置越高，音高越高)。</p>
+        <p><b>X轴位置:</b> 决定音符何时播放 (从左到右，按节奏进行量化)。</p>
+        <p><b>颜色:</b> 选择音高的八度范围 (红色: 中音区, 绿色: 高一个八度, 蓝色: 低一个八度)。</p>
+        <p><b>画笔大小:</b> 影响音量，并略微影响音符的持续时间。</p>
+    </div>
+
+    <script>
+        // JavaScript 逻辑代码
+        document.addEventListener('DOMContentLoaded', () => {
+            const canvas = document.getElementById('drawing-canvas');
+            const ctx = canvas.getContext('2d');
+            const colorOptions = document.querySelectorAll('.color-option');
+            const brushSizeSlider = document.getElementById('brush-size-slider');
+            const playMusicBtn = document.getElementById('play-music-btn');
+            const clearCanvasBtn = document.getElementById('clear-canvas-btn');
+
+            // 设置画布大小
+            canvas.width = 800;
+            canvas.height = 400;
+
+            let drawing = false;
+            let brushColor = 'red';
+            let brushSize = 10;
+            let drawnPoints = [];
+            let audioContext;
+
+            const getAudioContext = () => {
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                return audioContext;
+            };
+
+            function updateBrushSize() {
+                brushSize = brushSizeSlider.value;
+            }
+
+            colorOptions.forEach(option => {
+                option.addEventListener('click', () => {
+                    document.querySelector('.color-option.active').classList.remove('active');
+                    option.classList.add('active');
+                    brushColor = option.dataset.color;
+                });
+            });
+
+            brushSizeSlider.addEventListener('input', updateBrushSize);
+
+            function getMousePos(canvas, evt) {
+                const rect = canvas.getBoundingClientRect();
+                return {
+                    x: evt.clientX - rect.left,
+                    y: evt.clientY - rect.top
+                };
+            }
+
+            function startDrawing(e) {
+                drawing = true;
+                getAudioContext(); // 在用户首次交互时创建音频上下文
+                draw(e);
+            }
+
+            function stopDrawing() {
+                drawing = false;
+                ctx.beginPath();
+            }
+
+            function draw(e) {
+                if (!drawing) return;
+                const pos = getMousePos(canvas, e);
+                ctx.lineWidth = brushSize;
+                ctx.lineCap = 'round';
+                ctx.strokeStyle = brushColor;
+                ctx.lineTo(pos.x, pos.y);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(pos.x, pos.y);
+                drawnPoints.push({ x: pos.x, y: pos.y, color: brushColor, size: parseFloat(brushSize) });
+            }
+
+            canvas.addEventListener('mousedown', startDrawing);
+            canvas.addEventListener('mouseup', stopDrawing);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseleave', stopDrawing);
+
+            clearCanvasBtn.addEventListener('click', () => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                drawnPoints = [];
+            });
+
+            playMusicBtn.addEventListener('click', () => {
+                const actx = getAudioContext();
+                if (!actx) {
+                    alert("抱歉，您的浏览器不支持Web Audio API。");
+                    return;
+                }
+                if (actx.state === 'suspended') {
+                    actx.resume();
+                }
+
+                const gainNode = actx.createGain();
+                gainNode.connect(actx.destination);
+                const totalDuration = 4; // 音乐总时长（秒）
+
+                // 按X轴位置排序，确保音乐从左到右播放
+                const sortedPoints = [...drawnPoints].sort((a, b) => a.x - b.x);
+
+                sortedPoints.forEach(point => {
+                    const pitch = Math.floor((1 - point.y / canvas.height) * 48) + 36; // Y轴映射到MIDI音高 (C2到C6)
+                    const time = (point.x / canvas.width) * totalDuration;
+                    
+                    let octaveOffset = 0;
+                    let waveType = 'sine'; // 默认音色
+
+                    switch (point.color) {
+                        case 'limegreen': octaveOffset = 12; waveType = 'triangle'; break;
+                        case 'blue': octaveOffset = -12; waveType = 'sawtooth'; break;
+                        case 'yellow': waveType = 'square'; break;
+                    }
+                    
+                    const volume = point.size / 50;
+                    const noteDuration = 0.1 + (point.size / 50) * 0.2;
+                    const playTime = actx.currentTime + time;
+
+                    if (point.color === 'black') { // 黑色代表打击乐噪音
+                        const noiseSource = actx.createBufferSource();
+                        const bufferSize = actx.sampleRate * noteDuration;
+                        const buffer = actx.createBuffer(1, bufferSize, actx.sampleRate);
+                        const data = buffer.getChannelData(0);
+                        for (let i = 0; i < bufferSize; i++) {
+                            data[i] = Math.random() * 2 - 1;
+                        }
+                        noiseSource.buffer = buffer;
+                        const noiseGain = actx.createGain();
+                        noiseGain.gain.setValueAtTime(volume, playTime);
+                        noiseGain.gain.exponentialRampToValueAtTime(0.001, playTime + noteDuration);
+                        noiseSource.connect(noiseGain);
+                        noiseGain.connect(gainNode);
+                        noiseSource.start(playTime);
+                    } else { // 其他颜色代表音调
+                        const oscillator = actx.createOscillator();
+                        const noteGain = actx.createGain();
+                        oscillator.type = waveType;
+                        const frequency = 440 * Math.pow(2, ((pitch + octaveOffset) - 69) / 12);
+                        oscillator.frequency.setValueAtTime(frequency, playTime);
+                        noteGain.gain.setValueAtTime(volume, playTime);
+                        noteGain.gain.exponentialRampToValueAtTime(0.001, playTime + noteDuration);
+                        oscillator.connect(noteGain);
+                        noteGain.connect(gainNode);
+                        oscillator.start(playTime);
+                        oscillator.stop(playTime + noteDuration);
+                    }
+                });
+            });
+
+            updateBrushSize(); // 初始化画笔大小
+        });
+    </script>
+
+</body>
+</html>
