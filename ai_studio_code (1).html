@@ -1,9 +1,9 @@
-+<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Yici 画图变音乐 Draw to Melody</title>
+    <title>Tina 画图变音乐 Draw to Melody</title>
     <style>
         /* CSS 样式代码 */
         body {
@@ -109,7 +109,7 @@
 </head>
 <body>
 
-    <h1>Yici 画图变音乐 Draw to Melody</h1>
+    <h1>Tina 画图变音乐 Draw to Melody</h1>
 
     <div class="controls">
         <div class="color-brushes">
@@ -126,7 +126,6 @@
         </div>
     </div>
 
-    <!-- 绘画区域 -->
     <canvas id="drawing-canvas"></canvas>
 
     <div class="action-buttons">
@@ -156,7 +155,6 @@
             const playMusicBtn = document.getElementById('play-music-btn');
             const clearCanvasBtn = document.getElementById('clear-canvas-btn');
 
-            // 设置画布大小
             canvas.width = 800;
             canvas.height = 400;
 
@@ -197,7 +195,7 @@
 
             function startDrawing(e) {
                 drawing = true;
-                getAudioContext(); // 在用户首次交互时创建音频上下文
+                getAudioContext();
                 draw(e);
             }
 
@@ -241,17 +239,16 @@
 
                 const gainNode = actx.createGain();
                 gainNode.connect(actx.destination);
-                const totalDuration = 4; // 音乐总时长（秒）
+                const totalDuration = 4;
 
-                // 按X轴位置排序，确保音乐从左到右播放
                 const sortedPoints = [...drawnPoints].sort((a, b) => a.x - b.x);
 
                 sortedPoints.forEach(point => {
-                    const pitch = Math.floor((1 - point.y / canvas.height) * 48) + 36; // Y轴映射到MIDI音高 (C2到C6)
+                    const pitch = Math.floor((1 - point.y / canvas.height) * 48) + 36;
                     const time = (point.x / canvas.width) * totalDuration;
                     
                     let octaveOffset = 0;
-                    let waveType = 'sine'; // 默认音色
+                    let waveType = 'sine';
 
                     switch (point.color) {
                         case 'limegreen': octaveOffset = 12; waveType = 'triangle'; break;
@@ -263,7 +260,7 @@
                     const noteDuration = 0.1 + (point.size / 50) * 0.2;
                     const playTime = actx.currentTime + time;
 
-                    if (point.color === 'black') { // 黑色代表打击乐噪音
+                    if (point.color === 'black') {
                         const noiseSource = actx.createBufferSource();
                         const bufferSize = actx.sampleRate * noteDuration;
                         const buffer = actx.createBuffer(1, bufferSize, actx.sampleRate);
@@ -278,7 +275,7 @@
                         noiseSource.connect(noiseGain);
                         noiseGain.connect(gainNode);
                         noiseSource.start(playTime);
-                    } else { // 其他颜色代表音调
+                    } else {
                         const oscillator = actx.createOscillator();
                         const noteGain = actx.createGain();
                         oscillator.type = waveType;
@@ -294,7 +291,7 @@
                 });
             });
 
-            updateBrushSize(); // 初始化画笔大小
+            updateBrushSize();
         });
     </script>
 
